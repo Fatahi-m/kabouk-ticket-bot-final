@@ -895,7 +895,8 @@ async def admin_sales_report(update: Update, context: CallbackContext):
 
 # 🧾 ساخت بلیت با QR که دقیقاً مربع سیاه سمت راست را می‌پوشاند
 def create_ticket(name, ticket_id_str, event_name):
-
+    
+    # 🆕 ساخت محتوای QR Code با جزئیات کامل و خوانا
     qr_data = (
         f"KABOUK TICKET VALIDATION\n"
         f"Ticket ID: {ticket_id_str}\n"
@@ -904,27 +905,28 @@ def create_ticket(name, ticket_id_str, event_name):
         f"Payment Method: Bank Transfer (Verwendungszweck)\n"
         f"Issue Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
     )
-
+    
     qr = qrcode.make(qr_data)
-
-    # 🚨 نام فایل جدید شما در اینجا:
-    poster_template_path = "my_new_design.jpg"  # 👈 نام فایل طرح جدید خود را اینجا وارد کنید!
-
+    
+    poster_template_path = "ticket_template_final.jpg" 
+    
     if not os.path.exists(poster_template_path):
         logging.error(f"Error: Ticket template '{poster_template_path}' not found. Check file name and path.")
         raise FileNotFoundError(f"Ticket template '{poster_template_path}' not found. Cannot create ticket.")
     else:
         try:
             poster = Image.open(poster_template_path).convert("RGB")
+            logging.info(f"Successfully loaded ticket template: {poster_template_path} with dimensions {poster.size}")
+            print(f"Loaded poster size (width, height): {poster.size}") 
         except Exception as e:
             logging.error(f"Error opening or converting ticket template '{poster_template_path}': {e}")
             raise Exception(f"Failed to load ticket template image: {e}")
 
     poster_width, poster_height = poster.size
-
+    
     black_area_start_x = 960
     black_area_start_y = 100
-
+    
     black_area_width = 300
     black_area_height = 300
 
@@ -932,14 +934,16 @@ def create_ticket(name, ticket_id_str, event_name):
     final_qr_height = max(1, black_area_height)
 
     qr_image = qr.resize((final_qr_width, final_qr_height), Image.LANCZOS)
+    logging.info(f"QR code resized to {final_qr_width}x{final_qr_height} pixels to precisely fit the black area.")
 
     poster.paste(qr_image, (int(black_area_start_x), int(black_area_start_y)))
+    logging.info(f"QR code pasted at X:{int(black_area_start_x)}, Y:{int(black_area_start_y)}.")
 
-    # 🚨 ذخیره با یک نام موقت منحصر به فرد برای دور زدن کش
     filename = f"ticket_{ticket_id_str}.pdf"
-    temp_img_path = f"temp_ticket_{uuid4()}.jpg" # 👈 نام کاملا تصادفی
+    temp_img_path = f"temp_ticket_{ticket_id_str}.jpg"
     try:
         poster.save(temp_img_path, quality=95)
+        logging.info(f"Temporary ticket image saved to {temp_img_path}")
     except Exception as e:
         logging.error(f"Error saving temporary image '{temp_img_path}': {e}")
         raise Exception(f"Failed to save temporary image for PDF generation: {e}")
@@ -952,13 +956,15 @@ def create_ticket(name, ticket_id_str, event_name):
     try:
         pdf.image(temp_img_path, x=0, y=0, w=pdf.w, h=pdf.h) 
         pdf.output(filename, "F")
+        logging.info(f"PDF ticket generated: {filename}")
     except Exception as e:
         logging.error(f"Error generating PDF '{filename}': {e}")
         raise Exception(f"Failed to generate PDF ticket: {e}")
     finally:
         if os.path.exists(temp_img_path):
             os.remove(temp_img_path)
-
+            logging.info(f"Temporary image {temp_img_path} removed.")
+    
     return filename
 
 # 🟢 اجرای برنامه
