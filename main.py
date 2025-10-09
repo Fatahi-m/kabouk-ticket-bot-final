@@ -908,7 +908,7 @@ def create_ticket(name, ticket_id_str, event_name):
     
     qr = qrcode.make(qr_data)
     
-    poster_template_path = "ticket_template_kabouk.jpg" 
+    poster_template_path = "new_ticket_template_v2.jpg" 
     
     if not os.path.exists(poster_template_path):
         logging.error(f"Error: Ticket template '{poster_template_path}' not found. Check file name and path.")
