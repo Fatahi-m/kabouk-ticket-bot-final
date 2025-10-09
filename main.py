@@ -8,13 +8,16 @@ from telegram import (
 )
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, CallbackContext,
-    MessageHandler, filters, CallbackQueryHandler
+    MessageHandler, filters, CallbackQueryHandler,
+    # 🆕 کلاس برای هندل کردن خطاها
+    ContextTypes
 )
 from uuid import uuid4
 from datetime import datetime
 from sqlalchemy.orm import Session
 from database import init_db, get_db, User, Event, Ticket
 import os
+from collections import defaultdict
 
 
 # 🔧 تنظیمات اولیه
@@ -25,7 +28,7 @@ if not TOKEN:
 ADMIN_ID = int(os.getenv("TELEGRAM_ADMIN_ID", "922402042"))
 
 # 🆕 آی‌دی کانال‌های اجباری (تنظیمات خود را وارد کنید)
-TELEGRAM_CHANNEL_ID = -1003098867362 
+TELEGRAM_CHANNEL_ID = -1003098867362
 TELEGRAM_CHANNEL_USERNAME = "kabouk_events"
 WHATSAPP_CHANNEL_LINK = "https://whatsapp.com/channel/0029Vb6Ahlm7DAWtIN4bbO30"
 
@@ -58,7 +61,7 @@ LANGUAGES = {
         "contact_button": "📱 Kontakt",
         "social_media_button": "📢 Social Media",
         "language_select_button": "🌐 Sprache ändern",
-        
+
         "no_events_available": "Aktuell sind keine Events zum Kauf verfügbar.",
         "event_caption_format": "*{name}*\n🗓️ Datum: {date}\n📍 Ort: {location}\n⏰ Uhrzeit: {time} Uhr\n💰 Preis: {price} EUR\n\n*{description}*",
         "event_caption_no_poster": "(Kein Poster verfügbar)",
@@ -102,15 +105,21 @@ LANGUAGES = {
         "start_bot_prompt": "Bitte starte den Bot mit /start.",
         "language_select_prompt": "Bitte wähle deine Sprache:",
         "language_changed": "Sprache wurde auf Deutsch geändert.",
-        
+
         "admin_sales_report_title": "--- Verkaufsbericht ---",
         "admin_no_sales_found": "Es wurden noch keine Tickets verkauft oder es gibt keine offenen Anfragen.",
         "admin_sales_item": "<b>{index}. Käufer:</b> {name} (@{username})\n<b>Event:</b> {event_name}\n<b>Anzahl Tickets:</b> {amount}\n<b>Status:</b> {status}\n<b>Datum:</b> {date}",
         "admin_sales_status_pending": "Ausstehende Zahlung ⏳",
         "admin_sales_status_issued": "Bezahlt ✅",
-        
+
         "payment_proof_received": "✅ Dokument/Text als Zahlungsnachweis erhalten. Wird zur Prüfung an Admin gesendet.",
         "payment_proof_forwarded": "👆 مدرک واریزی کاربر در پیام بالاست.",
+
+        # 🆕 Neue Admin-Texte
+        "clear_sales_prompt": "⚠️ *ACHTUNG!* Bist du sicher, dass du *ALLE* Verkaufsdaten (Tickets) unwiderruflich löschen möchtest? Diese Aktion kann nicht rückgängig gemacht werden!",
+        "clear_sales_confirm_button": "✅ JA, ALLE Verkäufe löschen",
+        "clear_sales_success": "✅ Alle {count} Ticket-Einträge wurden erfolgreich aus der Datenbank gelöscht. Der Verkaufsbericht ist jetzt leer.",
+        "clear_sales_failure": "❌ Fehler beim Löschen der Verkaufsdaten. Keine Aktion ausgeführt.",
     },
     "fa": {
         "welcome_message": "به *ربات بلیط کابوک* خوش آمدید!\nچه کاری می‌خواهید انجام دهید؟",
@@ -127,7 +136,7 @@ LANGUAGES = {
         "contact_button": "📱 تماس با ما",
         "social_media_button": "📢 شبکه‌های اجتماعی",
         "language_select_button": "🌐 تغییر زبان",
-        
+
         "no_events_available": "در حال حاضر هیچ رویدادی برای خرید بلیط موجود نیست.",
         "event_caption_format": "*{name}*\n🗓️ تاریخ: {date}\n📍 مکان: {location}\n⏰ ساعت: {time} \n💰 قیمت: {price} یورو\n\n*{description}*",
         "event_caption_no_poster": "(پوستر موجود نیست)",
@@ -177,12 +186,18 @@ LANGUAGES = {
         "admin_sales_item": "<b>{index}. خریدار:</b> {name} (@{username})\n<b>رویداد:</b> {event_name}\n<b>تعداد بلیط:</b> {amount}\n<b>وضعیت:</b> {status}\n<b>تاریخ:</b> {date}",
         "admin_sales_status_pending": "در انتظار پرداخت ⏳",
         "admin_sales_status_issued": "پرداخت شده ✅",
-        
+
         "payment_proof_received": "✅ مدرک پرداخت (عکس/فایل) دریافت شد. در حال ارسال برای بررسی ادمین...",
         "payment_proof_forwarded": "👆 مدرک واریزی کاربر در پیام بالاست.",
+
+        # 🆕 Neue Admin-Texte
+        "clear_sales_prompt": "⚠️ *توجه!* آیا مطمئن هستید که می‌خواهید *همه* داده‌های فروش (بلیط‌ها) را به طور غیرقابل برگشت حذف کنید؟ این عمل قابل برگشت نیست!",
+        "clear_sales_confirm_button": "✅ بله، حذف *همه* فروش‌ها",
+        "clear_sales_success": "✅ همه {count} ورودی بلیط با موفقیت از پایگاه داده حذف شدند. گزارش فروش اکنون خالی است.",
+        "clear_sales_failure": "❌ خطایی در حذف داده‌های فروش رخ داد. عملیاتی انجام نشد.",
     },
     "ckb": { # کوردی سورانی (CKB)
-        "welcome_message": "بەخێربێن بۆ *بۆتی بلیتەکانی کابوک*!\nچی دەتەوێت بیکەیت؟",
+        "welcome_message": "بەخێربێن بۆ *بۆتی بلیتەکانی کابوک*!\نچی دەتەوێت بیکەیت؟",
         "start_message_unsubscribed": "سڵاو! بۆ ئەوەی خزمەتگوزاری بلیتەکانمان بەکاربهێنیت، دەبێت بچیتە ناو کەناڵەکانمان.",
         "join_telegram_button": "چوونە ناو کەناڵی تێلێگرام",
         "join_whatsapp_button": "چوونە ناو کەناڵی واتساپ",
@@ -196,7 +211,7 @@ LANGUAGES = {
         "contact_button": "📱 پەیوەندی",
         "social_media_button": "📢 سۆشیال میدیا",
         "language_select_button": "🌐 گۆڕینی زمان",
-        
+
         "no_events_available": "لە ئێستادا هیچ بۆنەیەک بۆ کڕین بەردەست نییە.",
         "event_caption_format": "*{name}*\n🗓️ ڕێکەوت: {date}\n📍 شوێن: {location}\n⏰ کات: {time}\n💰 نرخ: {price} یۆرۆ\n\n*{description}*",
         "event_caption_no_poster": "(پۆستەر نییە)",
@@ -215,7 +230,7 @@ LANGUAGES = {
 
         "payment_received_text": "پارەم ناردووە",
         "no_pending_payment": "⚠️ هیچ داواکارییەکی پارەدان نەدۆزرایەوە. تکایە سەرەتا بلیت بکڕە.",
-        "payment_request_admin": "💰 داواکاری پارەدانی نوێ بۆ بلیت:\nناو: {name}\nناوی بەکارهێنەر: @{username}\nناسنامەی بەکارهێنەر: {user_id}\nبۆنە: {event_name}\n<b>مەبەستی پارەدان/کۆدی ئاماژە:</b> {reference_code}\n\n<b>{notes}</b>",
+        "payment_request_admin": "💰 داواکاری پارەدانی نوێ بۆ بلیت:\nناو: {name}\nناوی بەکارهێنەر: @{username}\nناسنامەی بەکارهێنەر: {user_id}\نرووداو: {event_name}\n<b>مەبەستی پارەدان/کۆدی ئاماژە:</b> {reference_code}\n\n<b>{notes}</b>",
         "confirm_payment_button": "✅ پشتڕاستکردنەوەی پارەدان بۆ {name}",
         "payment_request_sent": "داواکاری پشتڕاستکردنەوەی پارەدانی تۆ نێردرا. تکایە چاوەڕێی پشکنینی وەسڵ/کۆد بە.",
         "not_authorized": "تۆ مۆڵەتی ئەنجامدانی ئەم کردارەت نییە.",
@@ -235,16 +250,22 @@ LANGUAGES = {
         "enter_anzahl_prompt": "چەند بلیت دەتەوێت؟",
         "invalid_amount": "❌ ژمارەی هەڵە. تکایە ژمارەیەکی پۆزەتیڤ بنووسە (بۆ نموونە 1، 2).",
         "problem_reselect_event": "کێشەیەک ڕوویدا. تکایە دووبارە دەست بە کڕینی بلیت بکەوە.",
-        "ticket_purchase_summary": "✅ تۆ دەتەوێت {amount} بلیت بۆ '{event_name}' بکڕیت.\nنرخی گشتی: {total_price} یۆرۆ.\n\nتکایە بڕەکە بۆ ئەم ژمارە بانکییە بگوازەوە:\n\n*ناوی بانک: بانکی تۆ*\n*خاوەن هەژمار: Kabouk Events*\n*IBAN: YOUR_IBAN_HERE*\n*BIC: YOUR_BIC_HERE*\n\n<b>گرنگ:</b> تکایە کۆدی <code>{reference_code}</code> وەکو مەبەستی پارەدان (Verwendungszweck) بنووسە.\n\nدوای گواستنەوەی پارە، <b>وێنەی وەسڵ (وەکو PDF/Photo) یان کۆدی ئاماژەمان بۆ بنێرە.</b>\n\n---\n<b>تێبینی گرنگ سەبارەت بە ناردنی بلیت:</b>\n\n* بۆ وەرگرتنی *دەستبەجێ*ی بلیت، تکایە لە گواستنەوەی <b>دەستبەجێ (Instant Transfer)</b> بەکاربهێنە. بلیتەکانت ڕاستەوخۆ دوای پشتڕاستکردنەوە دەنێردرێن.\n* لە ئەگەری بەکارهێنانی گواستنەوەی ئاسایی، وەرگرتنی پارەکە بەزۆری ١-٢ ڕۆژی کارکردن دەخایەنێت. بلیتەکان تەنها دوای وەرگرتنی پارە و پشکنینی دەستی لەلایەن ئەدمینەوە دەتوانرێت بنێردرێن.",
+        "ticket_purchase_summary": "✅ تۆ دەتەوێت {amount} بلیت بۆ '{event_name}' بکڕیت.\nنرخی گشتی: {total_price} یۆرۆ.\n\nتکایە بڕەکە بۆ ئەم ژمارە بانکییە بگوازەوە:\n\n*ناوی بانک: بانکی تۆ*\n*خاوەن هەژمار: Kabouk Events*\n*IBAN: YOUR_IBAN_HERE*\n*BIC: YOUR_BIC_HERE*\n\n<b>گرنگ:</b> تکایە کۆدی <code>{reference_code}</code> وەکو مەبەستی پارەدان (Verwendungszweck) بنووسە.\n\nدوای گواستنەوەی پارە، <b>وێنەی وەسڵ (وەکو PDF/Photo) یان کۆدی ئاماژەمان بۆ بنێرە.</b>\n\n---\n<b>تێبینی گرنگ سەبارەت بە ناردنی بلیت:</b>\n\n* بۆ وەرگرتنی *دەستبەجێ*ی بلیت، تکایە لە گواستنەوەی <b>دەستبەجێ (Instant Transfer)</b> بەکاربهێنە. بلیتەکانت ڕاستەوخۆ دوای پشتڕاستکردنەوە دەنێردرێن.\n* لە ئەگەری بەکارهێنانی گواستنەوەی ئاسایی، وەرگرتنی پارەکە بەزۆری ١-٢ ڕۆژی کارکردن دەخایەنێت. بلیتەکان تەنها دوای وەرگرتنی پارە و پشکنینی دەستی لەلایەن ئەدمینەوە دەتوانرێن بنێردرێن.",
 
         "admin_sales_report_title": "--- ڕاپۆرتی فرۆش ---",
-        "admin_no_sales_found": "تا ئێستا هیچ بلیتێک نەفرۆشراوە یان داواکارییەکی کراوە نییە.",
+        "admin_no_sales_found": "تا ئێستا هیچ بلیتێک نەفرۆشراوە یا درخواست باز وجود ندارد.",
         "admin_sales_item": "<b>{index}. کڕیار:</b> {name} (@{username})\n<b>بۆنە:</b> {event_name}\n<b>ژمارەی بلیت:</b> {amount}\n<b>دۆخ:</b> {status}\n<b>ڕێکەوت:</b> {date}",
         "admin_sales_status_pending": "چاوەڕوانیی پارەدان ⏳",
         "admin_sales_status_issued": "پارە دراوە ✅",
-        
+
         "payment_proof_received": "✅ بەڵگەی پارەدان (وێنە/فایل) وەرگیرا. بۆ پشکنین دەینێرین بۆ ئەدمین.",
         "payment_proof_forwarded": "👆 بەڵگەی پارەدانی کڕیار لە پەیامی سەرەوەدایە.",
+
+        # 🆕 Neue Admin-Texte
+        "clear_sales_prompt": "⚠️ *ئاگاداری!* ئایا دڵنیایت کە دەتەوێت *هەموو* داتای فرۆشتنەکان (بلیتەکان) بە شێوەیەکی نەگەڕێنراوە بکوژێنیتەوە؟ ئەم کردارە ناتوانرێت هەڵگیرێتەوە!",
+        "clear_sales_confirm_button": "✅ بەڵێ، سڕینەوەی *هەموو* فرۆشتنەکان",
+        "clear_sales_success": "✅ هەموو {count} تۆماری بلیت بە سەرکەوتوویی لە داتابەیس سڕدرانەوە. ڕاپۆرتی فرۆشتن ئێستا بەتاڵە.",
+        "clear_sales_failure": "❌ هەڵەیەک لە سڕینەوەی داتای فرۆشتن ڕوویدا. هیچ کارێک ئەنجام نەدرا.",
     }
 }
 
@@ -265,7 +286,7 @@ def get_text(user_language_code, key):
 
     # First try to get the text for the specific user_language_code
     # If not found, try to get from the default language ("de")
-    return LANGUAGES.get(user_language_code, LANGUAGES["de"]).get(key, LANGUAGES["de"][key])
+    return LANGUAGES.get(user_language_code, LANGUAGES["de"]).get(key, LANGUAGES["de"].get(key, f"Missing key: {key}"))
 
 # 🆕 تابع جدید برای استخراج توضیحات چند زبانه از رشته ذخیره شده در دیتابیس
 def get_localized_description(description_str, user_lang_code):
@@ -291,14 +312,24 @@ async def is_member_of_channel(bot, chat_id, channel_id):
 async def start(update: Update, context: CallbackContext):
     db: Session = next(get_db())
     user_telegram_id = update.effective_chat.user.id
+
+    try:
+        first_name = update.message.from_user.first_name or ""
+        last_name = update.message.from_user.last_name or ""
+        username = update.message.from_user.username
+    except:
+        first_name = ""
+        last_name = ""
+        username = None
+
     user = db.query(User).filter(User.telegram_id == user_telegram_id).first()
 
     if not user:
         user = User(
             telegram_id=user_telegram_id,
-            first_name=update.message.from_user.first_name or "",
-            last_name=update.message.from_user.last_name or "",
-            username=update.message.from_user.username,
+            first_name=first_name,
+            last_name=last_name,
+            username=username,
             current_step="start",
             language_code="de"
         )
@@ -311,9 +342,9 @@ async def start(update: Update, context: CallbackContext):
     db.commit()
 
     user_lang = user.language_code
-    
+
     is_subscribed = await is_member_of_channel(context.bot, user_telegram_id, TELEGRAM_CHANNEL_ID)
-    
+
     if not is_subscribed:
         subscribe_keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton(get_text(user_lang, "join_telegram_button"), url=f"https://t.me/{TELEGRAM_CHANNEL_USERNAME}")],
@@ -352,7 +383,7 @@ async def handle_message(update: Update, context: CallbackContext):
         return
 
     user_lang = user.language_code
-    
+
     is_subscribed = await is_member_of_channel(context.bot, user.telegram_id, TELEGRAM_CHANNEL_ID)
     if not is_subscribed:
         subscribe_keyboard = InlineKeyboardMarkup([
@@ -369,7 +400,7 @@ async def handle_message(update: Update, context: CallbackContext):
         return
 
     # 🚨🚨🚨 منطق اصلی پردازش پیام (بالاترین اولویت) 🚨🚨🚨
-    
+
     if user.current_step == "entering_vorname":
         user.first_name = text
         user.current_step = "entering_nachname"
@@ -377,7 +408,7 @@ async def handle_message(update: Update, context: CallbackContext):
         await update.message.reply_text(get_text(user_lang, "enter_nachname_prompt"))
         db.close()
         return
-        
+
     elif user.current_step == "entering_nachname":
         user.last_name = text
         user.current_step = "entering_anzahl"
@@ -391,7 +422,7 @@ async def handle_message(update: Update, context: CallbackContext):
             anzahl = int(text)
             if anzahl <= 0:
                 raise ValueError("Anzahl muss positiv sein.")
-            
+
             selected_event_id = user.selected_event_id
             if not selected_event_id:
                 await update.message.reply_text(get_text(user_lang, "problem_reselect_event"))
@@ -399,12 +430,14 @@ async def handle_message(update: Update, context: CallbackContext):
                 db.commit()
                 db.close()
                 return
-            
+
             selected_event = db.query(Event).filter(Event.id == selected_event_id).first()
-            
+
             # ثبت بلیت‌ها در دیتابیس (status='pending_payment')
-            for _ in range(anzahl):
-                ticket_id_str = str(uuid4())
+            # گرفتن کد مرجع از اولین بلیطی که ثبت می شود (برای نمایش به کاربر)
+            first_ticket_id_str = str(uuid4())
+            for i in range(anzahl):
+                ticket_id_str = first_ticket_id_str if i == 0 else str(uuid4()) # استفاده از اولین UUID به عنوان مرجع
                 new_ticket = Ticket(
                     ticket_id_str=ticket_id_str,
                     user_id=user.id,
@@ -414,14 +447,7 @@ async def handle_message(update: Update, context: CallbackContext):
                 db.add(new_ticket)
             db.commit()
 
-            # گرفتن کد مرجع از اولین بلیطی که ثبت شده (برای نمایش به کاربر)
-            first_pending_ticket = db.query(Ticket).filter(
-                Ticket.user_id == user.id,
-                Ticket.event_id == selected_event.id,
-                Ticket.status == "pending_payment"
-            ).order_by(Ticket.issue_date.asc()).first()
-
-            reference_code = first_pending_ticket.ticket_id_str if first_pending_ticket else "N/A"
+            reference_code = first_ticket_id_str
 
             # 🚨🚨🚨 فراخوانی صحیح متن زمانبندی و کد مرجع 🚨🚨🚨
             summary_text = get_text(user_lang, "ticket_purchase_summary").format(
@@ -443,33 +469,40 @@ async def handle_message(update: Update, context: CallbackContext):
 
     # 🚨🚨🚨 منطق دریافت مدرک پرداخت (عکس، فایل، متن) 🚨🚨🚨
     elif user.current_step == "waiting_for_payment":
-        
+
         latest_pending_ticket = db.query(Ticket).filter(
             Ticket.user_id == user.id,
             Ticket.status == "pending_payment"
         ).order_by(Ticket.issue_date.desc()).first()
-        
+
         if not latest_pending_ticket:
             await update.message.reply_text(get_text(user_lang, "no_pending_payment"))
             db.close()
             return
-            
+
+        # از کد مرجع اولین بلیط در مجموعه pending برای این کاربر و ایونت استفاده می کنیم.
+        first_pending_ticket = db.query(Ticket).filter(
+            Ticket.user_id == user.id,
+            Ticket.event_id == latest_pending_ticket.event_id,
+            Ticket.status == "pending_payment"
+        ).order_by(Ticket.issue_date.asc()).first()
+
         event = db.query(Event).filter(Event.id == latest_pending_ticket.event_id).first()
-        reference_code = latest_pending_ticket.ticket_id_str 
+        reference_code = first_pending_ticket.ticket_id_str if first_pending_ticket else "N/A"
 
         # 1. اگر کاربر عکس یا سند ارسال کرد (مدرک قوی)
         if update.message.photo or update.message.document:
-            
+
             caption_admin = (
                 f"💰 *درخواست تأیید پرداخت (تصویر رسید) از:* {user.first_name} {user.last_name or ''}\n"
                 f"*رویداد:* {event.name if event else 'N/A'}\n"
                 f"<b>کد مرجع سیستمی (برای تطبیق Verwendungszweck):</b> <code>{reference_code}</code>"
             )
-            
+
             button = InlineKeyboardMarkup.from_button(
                 InlineKeyboardButton(get_text("de", "confirm_payment_button").format(name=user.first_name), callback_data=f"confirm_{reference_code}")
             )
-            
+
             # 3. ارسال عکس یا سند به ادمین به صورت فوروارد
             await context.bot.send_message(chat_id=ADMIN_ID, text=caption_admin, parse_mode='HTML')
             await context.bot.forward_message(chat_id=ADMIN_ID, from_chat_id=chat_id, message_id=update.message.message_id)
@@ -482,7 +515,7 @@ async def handle_message(update: Update, context: CallbackContext):
         # 4. اگر کاربر پیام متنی ارسال کرد (کد مرجع یا توضیحات)
         elif update.message.text:
             text_input = update.message.text
-            
+
             text_to_admin = (
                 f"⚠️ *درخواست تأیید پرداخت (متن مرجع) از:* {user.first_name} {user.last_name or ''}\n"
                 f"*رویداد:* {event.name if event else 'N/A'}\n"
@@ -490,11 +523,11 @@ async def handle_message(update: Update, context: CallbackContext):
                 f"<b>کد مرجع سیستمی (برای تطبیق):</b> <code>{reference_code}</code>\n\n"
                 f"❗️ *نیاز به بررسی در پنل بانکی: از ادمین انتظار می‌رود تا Verwendungszweck را با کد بالا تطبیق دهد.*"
             )
-            
+
             button = InlineKeyboardMarkup.from_button(
                 InlineKeyboardButton(get_text("de", "confirm_payment_button").format(name=user.first_name), callback_data=f"confirm_{reference_code}")
             )
-            
+
             await context.bot.send_message(chat_id=ADMIN_ID, text=text_to_admin, reply_markup=button, parse_mode='HTML')
             await context.bot.send_message(chat_id=chat_id, text=get_text(user_lang, "payment_request_sent"))
 
@@ -503,7 +536,7 @@ async def handle_message(update: Update, context: CallbackContext):
 
         else:
             await update.message.reply_text(get_text(user_lang, "unrecognized_message"))
-        
+
         db.close()
         return
 
@@ -519,7 +552,7 @@ async def handle_message(update: Update, context: CallbackContext):
         for event in active_events:
             event_date_str = event.date.strftime('%d.%m.%Y')
             event_time_str = event.date.strftime('%H:%M')
-            
+
             localized_description = escape_markdown_v2(get_localized_description(event.description, user_lang))
 
             caption = get_text(user_lang, "event_caption_format").format(
@@ -539,7 +572,7 @@ async def handle_message(update: Update, context: CallbackContext):
             else:
                 caption += f"\n\n{get_text(user_lang, 'event_caption_no_poster')}"
                 await context.bot.send_message(chat_id, caption, parse_mode='Markdown', reply_markup=keyboard)
-        
+
         user.current_step = "select_event"
         db.commit()
 
@@ -549,12 +582,12 @@ async def handle_message(update: Update, context: CallbackContext):
             await context.bot.send_message(chat_id, get_text(user_lang, "no_upcoming_events"))
             db.close()
             return
-        
+
         await context.bot.send_message(chat_id, get_text(user_lang, "upcoming_events_title"), parse_mode='Markdown')
         for event in active_events:
             event_date_str = event.date.strftime('%d.%m.%Y')
             event_time_str = event.date.strftime('%H:%M')
-            
+
             localized_description = escape_markdown_v2(get_localized_description(event.description, user_lang))
 
             caption = get_text(user_lang, "event_caption_format").format(
@@ -580,11 +613,11 @@ async def handle_message(update: Update, context: CallbackContext):
             await context.bot.send_message(chat_id, get_text(user_lang, "no_past_events"))
             db.close()
             return
-        
+
         await context.bot.send_message(chat_id, get_text(user_lang, "past_events_title"), parse_mode='Markdown')
         for event in past_events:
             event_date_str = event.date.strftime('%d.%m.%Y')
-            
+
             localized_description = escape_markdown_v2(get_localized_description(event.description, user_lang))
 
             caption = get_text(user_lang, "event_caption_past").format(
@@ -638,10 +671,10 @@ async def handle_message(update: Update, context: CallbackContext):
     elif update.message.text and update.message.text.lower() == get_text(user_lang, "payment_received_text").lower():
         # اگر کاربر پیام قدیمی را تایپ کرد
         await update.message.reply_text("لطفاً به جای تایپ کردن، عکس رسید یا کد مرجع را برای ما ارسال کنید تا پرداخت شما تأیید شود.")
-    
+
     else:
         await update.message.reply_text(get_text(user_lang, "unrecognized_message"))
-    
+
     db.close()
 
 # ✅ مدیریت CallbackQuery برای انتخاب رویداد و تأیید پرداخت و تغییر زبان
@@ -651,7 +684,7 @@ async def handle_callback_query(update: Update, context: CallbackContext):
 
     db: Session = next(get_db())
     chat_id = query.message.chat_id
-    
+
     current_user = db.query(User).filter(User.telegram_id == chat_id).first()
     if not current_user:
         current_user = User(
@@ -665,7 +698,6 @@ async def handle_callback_query(update: Update, context: CallbackContext):
         db.add(current_user)
         db.commit()
         db.refresh(current_user)
-        logging.info(f"New user/admin {chat_id} added to DB during callback.")
 
     user_lang = current_user.language_code
 
@@ -676,12 +708,12 @@ async def handle_callback_query(update: Update, context: CallbackContext):
             current_user.selected_event_id = event_id
             current_user.current_step = "entering_vorname"
             db.commit()
-            
+
             await context.bot.send_message(
                 chat_id=chat_id,
                 text=get_text(user_lang, "event_selected_prompt_vorname").format(event_name=selected_event.name)
             )
-            
+
         else:
             await context.bot.send_message(
                 chat_id=chat_id,
@@ -692,28 +724,28 @@ async def handle_callback_query(update: Update, context: CallbackContext):
 
     elif query.data.startswith("confirm_"):
         if chat_id != ADMIN_ID:
-            await query.edit_message_text(get_text(user_lang, "not_authorized"))
+            await query.edit_message_text(get_text("de", "not_authorized"))
             db.close()
             return
-        
+
         ticket_id_str_to_confirm = query.data.split("_")[1]
-        
+
         sample_ticket = db.query(Ticket).filter(
             Ticket.ticket_id_str == ticket_id_str_to_confirm,
             Ticket.status == "pending_payment"
         ).first()
 
         if not sample_ticket:
-            await query.edit_message_text(get_text(user_lang, "ticket_not_pending"))
+            await query.edit_message_text(get_text("de", "ticket_not_pending"))
             db.close()
             return
-        
+
         ticket_holder_user = db.query(User).filter(User.id == sample_ticket.user_id).first()
         ticket_event = db.query(Event).filter(Event.id == sample_ticket.event_id).first()
 
         if not ticket_holder_user or not ticket_event:
             logging.error(f"Critical error: User or Event not found for ticket {sample_ticket.ticket_id_str}.")
-            await query.edit_message_text(get_text(user_lang, "error_user_event_not_found"))
+            await query.edit_message_text(get_text("de", "error_user_event_not_found"))
             db.close()
             return
 
@@ -722,37 +754,43 @@ async def handle_callback_query(update: Update, context: CallbackContext):
             Ticket.event_id == ticket_event.id,
             Ticket.status == "pending_payment"
         ).all()
-        
+
         if not all_pending_tickets:
-            await query.edit_message_text(get_text(user_lang, "ticket_not_pending"))
+            await query.edit_message_text(get_text("de", "ticket_not_pending"))
             db.close()
             return
 
         issued_tickets_count = 0
+        full_name = f"{ticket_holder_user.first_name} {ticket_holder_user.last_name or ''}".strip()
+
         for ticket in all_pending_tickets:
             try:
-                full_name = f"{ticket_holder_user.first_name} {ticket_holder_user.last_name or ''}".strip()
+                # 2. ایجاد و ارسال تیکت PDF
                 pdf_path = create_ticket(full_name, ticket.ticket_id_str, ticket_event.name)
-                
+
                 await context.bot.send_document(
                     chat_id=ticket_holder_user.telegram_id,
                     document=open(pdf_path, "rb"),
                     caption=get_text(ticket_holder_user.language_code, "payment_confirmed_ticket_sent_user").format(event_name=ticket_event.name)
                 )
 
+                # 3. به‌روزرسانی وضعیت در دیتابیس
                 ticket.status = "issued"
                 db.commit()
+
+                # 4. حذف فایل موقت
                 os.remove(pdf_path)
                 issued_tickets_count += 1
-                
+
                 logging.info(f"Ticket {ticket.ticket_id_str} issued to {ticket_holder_user.telegram_id}")
 
             except Exception as e:
                 logging.error(f"Error issuing ticket {ticket.ticket_id_str} for user {ticket_holder_user.telegram_id}: {e}", exc_info=True)
-                await context.bot.send_message(chat_id=ADMIN_ID, text=get_text("de", "error_sending_ticket_admin").format(ticket_id=ticket.ticket_id_str, error=e))
+                await context.bot.send_message(chat_id=ADMIN_ID, text=get_text("de", "error_sending_ticket_admin").format(reference_code=ticket.ticket_id_str, error=e))
                 await context.bot.send_message(chat_id=ticket_holder_user.telegram_id, text=get_text(ticket_holder_user.language_code, "error_sending_ticket_user"))
-                
+
         if issued_tickets_count > 0:
+            # 5. ارسال پیام نهایی به کاربر
             await context.bot.send_message(
                 chat_id=ticket_holder_user.telegram_id,
                 text=get_text(ticket_holder_user.language_code, "tickets_sent_multiple").format(count=issued_tickets_count, event_name=ticket_event.name)
@@ -761,12 +799,15 @@ async def handle_callback_query(update: Update, context: CallbackContext):
                 chat_id=ticket_holder_user.telegram_id,
                 text=get_text(ticket_holder_user.language_code, "thank_you_message_user")
             )
-            
-            await query.edit_message_text(get_text("de", "payment_confirmed_admin").format(name=full_name, ticket_id=all_pending_tickets[0].ticket_id_str if all_pending_tickets else 'N/A'))
+
+            # 6. به‌روزرسانی پیام ادمین
+            await query.edit_message_text(get_text("de", "payment_confirmed_admin").format(name=full_name, reference_code=all_pending_tickets[0].ticket_id_str if all_pending_tickets else 'N/A'))
         else:
-            await query.edit_message_text(get_text("de", "error_sending_ticket_admin").format(ticket_id='N/A', error="No tickets were successfully issued."))
-            
+            await query.edit_message_text(get_text("de", "error_sending_ticket_admin").format(reference_code=ticket_id_str_to_confirm, error="No tickets were successfully issued."))
+
         db.close()
+        return
+
 
     elif query.data.startswith("set_lang_"):
         new_lang_code = query.data.split("_")[2]
@@ -774,7 +815,7 @@ async def handle_callback_query(update: Update, context: CallbackContext):
             current_user.language_code = new_lang_code
             db.commit()
             await query.edit_message_text(get_text(new_lang_code, "language_changed"))
-            
+
             keyboard = [
                 [KeyboardButton(get_text(new_lang_code, "ticket_buy_button"))],
                 [KeyboardButton(get_text(new_lang_code, "next_event_button")), KeyboardButton(get_text(new_lang_code, "past_events_button"))],
@@ -790,10 +831,11 @@ async def handle_callback_query(update: Update, context: CallbackContext):
         else:
             await query.edit_message_text(get_text(user_lang, "unrecognized_message"))
         db.close()
-    
+        return
+
     elif query.data == "check_subscription":
         is_subscribed = await is_member_of_channel(context.bot, current_user.telegram_id, TELEGRAM_CHANNEL_ID)
-        
+
         if is_subscribed:
             await query.edit_message_text(get_text(user_lang, "thank_you_for_joining"))
             keyboard = [
@@ -811,6 +853,38 @@ async def handle_callback_query(update: Update, context: CallbackContext):
         else:
             await query.edit_message_text(get_text(user_lang, "not_subscribed_error"))
         db.close()
+        return
+
+    # 🆕 Callback-Handler zum Bestätigen des Löschens
+    elif query.data == "confirm_clear_sales":
+        if chat_id != ADMIN_ID:
+            await query.edit_message_text(get_text("de", "not_authorized"))
+            db.close()
+            return
+
+        try:
+            # Löschen aller Tickets
+            deleted_count = db.query(Ticket).delete()
+            db.commit()
+
+            # Aktualisierung der Nachricht im Admin-Chat
+            await query.edit_message_text(
+                get_text("de", "clear_sales_success").format(count=deleted_count),
+                parse_mode='Markdown'
+            )
+            logging.info(f"Admin {chat_id} cleared all {deleted_count} ticket entries.")
+
+        except Exception as e:
+            logging.error(f"Error clearing all sales data: {e}", exc_info=True)
+            await query.edit_message_text(
+                get_text("de", "clear_sales_failure"),
+                parse_mode='Markdown'
+            )
+        finally:
+            db.close()
+            return
+
+    db.close()
 
 
 # 🆕 تابع جدید برای ارسال لیست فروش به ادمین (نسخه بهبود یافته)
@@ -822,36 +896,40 @@ async def admin_sales_report(update: Update, context: CallbackContext):
     db: Session = next(get_db())
 
     all_tickets = db.query(Ticket).order_by(Ticket.issue_date.asc()).all()
-    
+
     if not all_tickets:
         await context.bot.send_message(chat_id, get_text("de", "admin_no_sales_found"))
         db.close()
         return
 
-    sales_data = {}
+    grouped_sales = defaultdict(lambda: {'tickets_count': 0, 'status': None, 'issue_date': None, 'event_price': 0, 'user': None, 'event': None})
+
     total_issued = 0
     total_pending = 0
-    
+
     for ticket in all_tickets:
-        key = (ticket.user_id, ticket.event_id, ticket.issue_date.date())
-        if key not in sales_data:
-            sales_data[key] = {
-                'tickets_count': 0,
-                'status': ticket.status,
-                'issue_date': ticket.issue_date,
-                'event_price': db.query(Event.price).filter(Event.id == ticket.event_id).scalar()
-            }
-        sales_data[key]['tickets_count'] += 1
+        key = (ticket.user_id, ticket.event_id, ticket.status)
+
+        if grouped_sales[key]['tickets_count'] == 0:
+            grouped_sales[key]['status'] = ticket.status
+            grouped_sales[key]['issue_date'] = ticket.issue_date
+            grouped_sales[key]['event_price'] = db.query(Event.price).filter(Event.id == ticket.event_id).scalar()
+            grouped_sales[key]['user'] = db.query(User).filter(User.id == ticket.user_id).first()
+            grouped_sales[key]['event'] = db.query(Event).filter(Event.id == ticket.event_id).first()
+
+        grouped_sales[key]['tickets_count'] += 1
 
         if ticket.status == 'issued':
             total_issued += 1
         elif ticket.status == 'pending_payment':
             total_pending += 1
 
-    total_revenue = sum(data['tickets_count'] * data['event_price'] for data in sales_data.values() if data['status'] == 'issued')
+
+    final_grouped_data = list(grouped_sales.values())
+    total_revenue = sum(data['tickets_count'] * data['event_price'] for data in final_grouped_data if data['status'] == 'issued')
 
     report_text = get_text("de", "admin_sales_report_title") + "\n\n"
-    
+
     report_text += "<b>--- خلاصه فروش ---</b>\n"
     report_text += f"<b>کل بلیط‌های فروخته شده:</b> {total_issued}\n"
     report_text += f"<b>بلیط‌های در انتظار پرداخت:</b> {total_pending}\n"
@@ -859,44 +937,63 @@ async def admin_sales_report(update: Update, context: CallbackContext):
     report_text += "<b>--- جزئیات فروش (بر اساس رویداد و خریدار) ---</b>\n\n"
 
     index = 1
-    events_in_report = {}
-    for data in sales_data.values():
-        event_name = db.query(Event.name).filter(Event.id == data['event_id']).scalar()
-        if event_name not in events_in_report:
-            events_in_report[event_name] = []
-        events_in_report[event_name].append(data)
 
-    for event_name, transactions in events_in_report.items():
-        report_text += f"<u><b>🎤 {event_name}</b></u>\n"
-        
-        transactions.sort(key=lambda x: x['issue_date'])
-        
-        for data in transactions:
-            user = db.query(User).filter(User.id == data['user_id']).first()
-            if user:
-                status_text = get_text("de", "admin_sales_status_issued") if data['status'] == 'issued' else get_text("de", "admin_sales_status_pending")
-                total_amount = data['tickets_count'] * data['event_price']
-                
-                report_item = get_text("de", "admin_sales_item").format(
-                    index=index,
-                    name=f"{user.first_name} {user.last_name or ''}",
-                    username=user.username or 'N/A',
-                    event_name=event.name,
-                    amount=data['tickets_count'],
-                    status=status_text,
-                    date=data['issue_date'].strftime('%Y-%m-%d | %H:%M')
-                )
-                report_text += report_item + "\n\n"
-                index += 1
-            
+    final_grouped_data.sort(key=lambda x: x['issue_date'])
+
+    for data in final_grouped_data:
+        user = data['user']
+        event = data['event']
+
+        if user and event:
+            status_text = get_text("de", "admin_sales_status_issued") if data['status'] == 'issued' else get_text("de", "admin_sales_status_pending")
+
+            report_item = get_text("de", "admin_sales_item").format(
+                index=index,
+                name=f"{user.first_name} {user.last_name or ''}",
+                username=user.username or 'N/A',
+                event_name=event.name,
+                amount=data['tickets_count'],
+                status=status_text,
+                date=data['issue_date'].strftime('%Y-%m-%d | %H:%M')
+            )
+            report_text += report_item + "\n"
+            index += 1
+
     await context.bot.send_message(chat_id, report_text, parse_mode='HTML')
     db.close()
 
 
+# 🆕 Admin-Befehl zum Löschen der Verkaufsdaten
+async def admin_clear_sales(update: Update, context: CallbackContext):
+    logging.info(f"Received /clearsales command from chat ID: {update.effective_chat.id}")
+
+    chat_id = update.effective_chat.chat_id
+
+    if chat_id != ADMIN_ID:
+        await update.message.reply_text(get_text("de", "not_authorized"))
+        return
+
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton(get_text("de", "clear_sales_confirm_button"), callback_data="confirm_clear_sales")],
+    ])
+
+    await update.message.reply_text(
+        get_text("de", "clear_sales_prompt"),
+        reply_markup=keyboard,
+        parse_mode='Markdown'
+    )
+
+# 🆕 Error Handler برای جلوگیری از کرش کردن ربات
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Log the error and notify the admin."""
+    logging.error(f"Update {update} caused error {context.error}", exc_info=context.error)
+    # 🚨 اینجا می‌توانید یک پیام به ADMIN_ID ارسال کنید تا از خطا مطلع شوید، مثلا:
+    # if update:
+    #     await context.bot.send_message(chat_id=ADMIN_ID, text=f"خطای بحرانی در پردازش! Update: {update.update_id}\nError: {context.error}")
+
 # 🧾 ساخت بلیت با QR که دقیقاً مربع سیاه سمت راست را می‌پوشاند
 def create_ticket(name, ticket_id_str, event_name):
-    
-    # 🆕 ساخت محتوای QR Code با جزئیات کامل و خوانا
+
     qr_data = (
         f"KABOUK TICKET VALIDATION\n"
         f"Ticket ID: {ticket_id_str}\n"
@@ -905,11 +1002,11 @@ def create_ticket(name, ticket_id_str, event_name):
         f"Payment Method: Bank Transfer (Verwendungszweck)\n"
         f"Issue Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
     )
-    
+
     qr = qrcode.make(qr_data)
-    
-    poster_template_path = "my_new_design.jpg" 
-    
+
+    poster_template_path = "my_new_design.jpg"  
+
     if not os.path.exists(poster_template_path):
         logging.error(f"Error: Ticket template '{poster_template_path}' not found. Check file name and path.")
         raise FileNotFoundError(f"Ticket template '{poster_template_path}' not found. Cannot create ticket.")
@@ -917,16 +1014,16 @@ def create_ticket(name, ticket_id_str, event_name):
         try:
             poster = Image.open(poster_template_path).convert("RGB")
             logging.info(f"Successfully loaded ticket template: {poster_template_path} with dimensions {poster.size}")
-            print(f"Loaded poster size (width, height): {poster.size}") 
+            print(f"Loaded poster size (width, height): {poster.size}")  
         except Exception as e:
             logging.error(f"Error opening or converting ticket template '{poster_template_path}': {e}")
             raise Exception(f"Failed to load ticket template image: {e}")
 
     poster_width, poster_height = poster.size
-    
-    black_area_start_x = 960     
+
+    black_area_start_x = 960      
     black_area_start_y = 100
-    
+
     black_area_width = 300
     black_area_height = 300
 
@@ -964,21 +1061,34 @@ def create_ticket(name, ticket_id_str, event_name):
         if os.path.exists(temp_img_path):
             os.remove(temp_img_path)
             logging.info(f"Temporary image {temp_img_path} removed.")
-    
+
     return filename
 
 # 🟢 اجرای برنامه
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    
+
     init_db()
 
     app = ApplicationBuilder().token(TOKEN).build()
 
+    # --- ثبت Command Handlers (دستورات) - بالاترین اولویت ---
     app.add_handler(CommandHandler("start", start))
+
+    # 🚨 دستورات ادمین با فیلتر صحیح
     app.add_handler(CommandHandler("sales", admin_sales_report, filters=filters.Chat(ADMIN_ID)))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND | filters.PHOTO | filters.Document.ALL, handle_message))
+    app.add_handler(CommandHandler("clearsales", admin_clear_sales, filters=filters.Chat(ADMIN_ID))) # ⬅️ اینجا فیلتر ادمین برگردانده شد و ثبت صحیح انجام شد
+
+    # --- ثبت Callback Handler (دکمه‌های اینلاین) ---
     app.add_handler(CallbackQueryHandler(handle_callback_query))
+
+    # --- ثبت Message Handlers (پیام‌های عادی، عکس و فایل) - پایین‌ترین اولویت ---
+    # این باید بعد از CommandHandlers باشد.
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND | filters.PHOTO | filters.Document.ALL, handle_message))
+
+    # 🆕 ثبت Error Handler
+    app.add_error_handler(error_handler)
+
 
     print("🤖 Der Bot läuft...")
     app.run_polling()
