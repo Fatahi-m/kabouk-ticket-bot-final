@@ -156,10 +156,10 @@ Bei Problemen wende dich bitte an den Support über den *Kontakt*-Button.""",
 
 Bitte überweise den Betrag an die folgende Bankverbindung:
 
-*Bankname: Ihre Bank*
-*Kontoinhaber: Kabouk Events*
-*IBAN: DE12345678901234567890*
-*BIC: ABCD1234567*
+*Bankname:  N26*
+*Kontoinhaber: Mukhtar Fatahi*
+*IBAN: DE66100110012264463335*
+*BIC: NTSBDEB1XXX*
 
 <b>WICHTIG:</b> Bitte gib den Code <code>{reference_code}</code> als Verwendungszweck an.
 
@@ -379,10 +379,10 @@ Nach der Überweisung sende uns bitte <b>die Quittung (Foto/PDF) oder den genaue
 
 لطفاً مبلغ را به حساب بانکی زیر واریز کنید:
 
-*نام بانک: بانک شما*
-*صاحب حساب: Kabouk Events*
-*شماره شبا: YOUR_IBAN_HERE*
-*سوییفت کد: YOUR_BIC_HERE*
+*N26 : بانک شما*
+*صاحب حساب: Mukhtar Fatahi *
+*شماره شبا: DE66100110012264463335*
+*سوییفت کد: NTSBDEB1XXX*
 
 <b>توجه:</b> لطفاً کد <code>{reference_code}</code> را به عنوان هدف واریز (Verwendungszweck) وارد نمایید.
 
@@ -509,10 +509,10 @@ Nach der Überweisung sende uns bitte <b>die Quittung (Foto/PDF) oder den genaue
 
 لطفاً مبلغ را به حساب بانکی زیر واریز کنید:
 
-*نام بانک: بانک شما*
-*صاحب حساب: Kabouk Events*
-*شماره شبا: YOUR_IBAN_HERE*
-*سوییفت کد: YOUR_BIC_HERE*
+*نام بانک: N26 *
+*صاحب حساب: Mukhtar Fatahi*
+*شماره شبا: DE66100110012264463335*
+*سوییفت کد: NTSBDEB1XXX*
 
 <b>توجه:</b> لطفاً کد <code>{reference_code}</code> را به عنوان هدف واریز (Verwendungszweck) وارد نمایید.
 
@@ -651,7 +651,7 @@ Nach der Überweisung sende uns bitte <b>die Quittung (Foto/PDF) oder den genaue
 
         # --- UX Improvements ---
         "my_tickets_button": "🎟️ بلیتەکانم",
-        "help_button": "❓ یارمەتی",
+        "help_button": "❓ ڕێنمایی",
         "my_tickets_title": "بلیتە کڕدراوەکانت:",
         "my_tickets_none": "تۆ هێشتا هیچ بلیتێکت نەکڕیوە.",
         "help_text": """*یارمەتی و ڕێنمایی*
@@ -733,10 +733,10 @@ Nach der Überweisung sende uns bitte <b>die Quittung (Foto/PDF) oder den genaue
 
 لطفاً مبلغ را به حساب بانکی زیر واریز کنید:
 
-*نام بانک: بانکی تۆ*
-*صاحب حساب: Kabouk Events*
-*شماره شبا: YOUR_IBAN_HERE*
-*سوییفت کد: YOUR_BIC_HERE*
+*N26 : بانکی تۆ*
+*صاحب حساب:  Mukhtar Fatahi*
+*شماره شبا: DE66100110012264463335*
+*سوییفت کد: NTSBDEB1XXX*
 
 <b>توجه:</b> لطفاً کد <code>{reference_code}</code> وەکو مەبەستی پارەدان (Verwendungszweck) وارد نمایید.
 
